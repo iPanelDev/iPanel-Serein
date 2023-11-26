@@ -2,11 +2,8 @@
 
 declare interface Packet {
     type: string;
-    sub_type: string;
-    echo?: any;
+    subType: string;
     data?: any;
-    sender?: any;
-    request_id?: string;
 }
 
 declare interface IConfig {
@@ -28,20 +25,7 @@ declare interface IInfo {
     trialTimes: number;
 }
 
-declare interface DirInfo {
-    is_exist: boolean;
-    dir: string;
-    items?: Item[];
-}
-
-declare interface Item {
-    type: "file" | "dir";
-    path: string;
-    name: string;
-    size?: number;
-}
-
-const VERSION = "2.2.0";
+const VERSION = "2.3.0.0";
 serein.registerPlugin(
     "iPanel-Serein",
     VERSION,
@@ -61,13 +45,13 @@ const {
     Text: { Encoding },
     Environment,
     Guid,
-    IO: { File, FileInfo, Path },
+    IO: { File },
 } = System;
 
 const logger = new Logger("iPanel");
 const paths = {
-    config: "plugins/iPanel-Serein/config.json",
     dir: "plugins/iPanel-Serein",
+    config: "plugins/iPanel-Serein/config.json",
     instanceID: "plugins/iPanel-Serein/.instanceId",
 };
 
@@ -79,7 +63,7 @@ const outputCache = [];
  */
 const defaultConfig: IConfig = {
     websocket: {
-        addr: "ws://127.0.0.1:30000",
+        addr: "ws://127.0.0.1:30000/ws/instance",
         password: "",
     },
     customName: "",
@@ -92,16 +76,8 @@ const defaultConfig: IConfig = {
 
 import stdio = require("./modules/stdio.js");
 
-const {
-    createDirectory,
-    existDirectory,
-    existFile,
-    getDirectories,
-    getFileName,
-    getFiles,
-    readAllTextFromFile,
-    writeAllTextToFile,
-} = stdio;
+const { createDirectory, existFile, readAllTextFromFile, writeAllTextToFile } =
+    stdio;
 
 const config = loadConfig();
 
@@ -125,8 +101,8 @@ function send(packet: Packet) {
 /**
  * 快速发送
  */
-function fastSend(type: string, sub_type: string, data?: any) {
-    send({ type, sub_type, data });
+function fastSend(type: string, subType: string, data?: any) {
+    send({ type, subType: subType, data });
 }
 
 /**
@@ -149,8 +125,8 @@ function onmessage(msg: string) {
 /**
  * 处理event
  */
-function handleEvent({ sub_type, data }: Packet) {
-    switch (sub_type) {
+function handleEvent({ subType, data }: Packet) {
+    switch (subType) {
         case "verify_result":
             if (data.success) {
                 logger.info("[Host] 验证通过");
@@ -167,43 +143,27 @@ function handleEvent({ sub_type, data }: Packet) {
 /**
  * 处理request
  */
-function handleRequest({ sub_type, data, sender, request_id }: Packet) {
-    switch (sub_type) {
-        case "verify_request":
-            send({
-                type: "request",
-                sub_type: "verify",
-                data: {
-                    instance_id: loadInstanceID(),
-                    token: getMD5(data.uuid + config.websocket.password),
-                    custom_name: config.customName || null,
-                    client_type: "instance",
-                    metadata: {
-                        version: serein.version,
-                        name: "Serein",
-                    },
-                },
-            });
-            break;
-
+function handleRequest({ subType, data }: Packet) {
+    switch (subType) {
         case "heartbeat":
             const {
                 name: os,
                 hardware: {
-                    CPUs: [{ name: cpu_name }],
-                    RAM: { free: free_ram, total: total_ram },
+                    CPUs: [{ name: cpuName }],
+                    RAM: { free: freeRam, total: totalRam },
                 },
             } = serein.getSysInfo();
+            const motd = serein.getServerMotd();
             send({
                 type: "return",
-                sub_type: "heartbeat",
+                subType: "heartbeat",
                 data: {
-                    sys: {
+                    system: {
                         os,
-                        cpu_name,
-                        total_ram,
-                        free_ram,
-                        cpu_usage: serein.getCPUUsage(),
+                        cpuName,
+                        totalRam,
+                        freeRam,
+                        cpuUsage: serein.getCPUUsage(),
                     },
                     server: {
                         filename:
@@ -211,136 +171,36 @@ function handleRequest({ sub_type, data, sender, request_id }: Packet) {
                                 serein.getServerFile()) ||
                             null,
                         status: serein.getServerStatus(),
-                        run_time: serein.getServerTime() || null,
+                        runTime: serein.getServerTime() || null,
                         usage: serein.getServerCPUUsage(),
+                        capacity: motd?.maxPlayer,
+                        onlinePlayers: motd?.onlinePlayer,
+                        version: motd?.version,
                     },
                 },
             });
             break;
 
         case "server_start":
-            logger.info(`[${sender.address}] 启动服务器`);
+            logger.info(`[用户] 启动服务器`);
             serein.startServer();
             break;
 
         case "server_stop":
-            logger.info(`[${sender.address}] 关闭服务器`);
+            logger.info(`[用户] 关闭服务器`);
             serein.stopServer();
             break;
 
         case "server_kill":
-            logger.warn(`[${sender.address}] 强制结束服务器`);
+            logger.warn(`[用户] 强制结束服务器`);
             serein.killServer();
             break;
 
         case "server_input":
-            logger.info(`[${sender.address}] 服务器输入`);
+            logger.info(`[用户] 服务器输入`);
             Array.from(data).forEach((line: string) => serein.sendCmd(line));
             break;
-
-        case "get_dir_info":
-            const abosultePath = getAbosultePath(data);
-            if (
-                !existDirectory(abosultePath) ||
-                !checkPath(abosultePath, serein.path)
-            ) {
-                send({
-                    type: "return",
-                    sub_type: "dir_info",
-                    data: { is_exist: false, dir: data } as DirInfo,
-                    request_id,
-                });
-                break;
-            }
-            const items: Item[] = [];
-            getDirectories(abosultePath)
-                .map((dir) => dir.replaceAll("\\", "/"))
-                .forEach((dir) => {
-                    items.push({
-                        type: "dir",
-                        name: dir.substring(dir.lastIndexOf("/") + 1),
-                        path: getRelativePath(dir, serein.path).replaceAll(
-                            "\\",
-                            "/"
-                        ),
-                    });
-                });
-            getFiles(abosultePath)
-                .map((file) => file.replaceAll("\\", "/"))
-                .forEach((file) => {
-                    items.push({
-                        type: "file",
-                        name: getFileName(file),
-                        path: getRelativePath(file, serein.path).replaceAll(
-                            "\\",
-                            "/"
-                        ),
-                        size: new FileInfo(file).length,
-                    });
-                });
-
-            send({
-                type: "return",
-                sub_type: "dir_info",
-                data: {
-                    is_exist: true,
-                    dir: data,
-                    items,
-                } as DirInfo,
-                request_id,
-            });
-            break;
     }
-}
-
-/**
- * 检查路径
- * @param path 要检查的路径
- * @param safePath 安全路径
- * @returns 检查结果
- */
-function checkPath(path: string, safePath: string) {
-    const patten = path.split(Path.DirectorySeparatorChar),
-        safePathPatten = safePath.split(Path.DirectorySeparatorChar);
-
-    for (let i = 0; i < safePathPatten.length; i++) {
-        if (safePathPatten[i] && safePathPatten[i] != patten[i]) {
-            return false;
-        }
-    }
-    return true;
-}
-
-/**
- * 获取绝对路径
- * @param path 路径
- * @returns 拼接后的路径
- */
-function getAbosultePath(path: string, basePath?: string) {
-    try {
-        return (
-            Path.Combine(basePath || serein.path, path) as string
-        ).replaceAll("/", Path.DirectorySeparatorChar);
-    } catch {
-        return "";
-    }
-}
-
-/**
- * 获取相对路径
- * @returns 拼接后的路径
- */
-function getRelativePath(relativeTo: string, path: string) {
-    const relativeToPattens = relativeTo.replaceAll("\\", "/").split("/");
-    const pathPattens = path.replaceAll("\\", "/").split("/");
-    const result = [];
-
-    for (let i = 0; i < relativeToPattens.length; i++) {
-        if (relativeToPattens[i] != pathPattens[i] && !pathPattens[i]) {
-            result.push(relativeToPattens[i]);
-        }
-    }
-    return result.join("/");
 }
 
 /**
@@ -377,6 +237,23 @@ function onopen() {
     info.disconnectInfo = undefined;
     info.trialTimes = 0;
     logger.info(`已连接到“${config.websocket.addr}”`);
+
+    const time = new Date().toISOString();
+    send({
+        type: "request",
+        subType: "verify",
+        data: {
+            md5: getMD5(`${time}.${config.websocket.password}`),
+            instanceId: loadInstanceID(),
+            customName: config.customName || null,
+            time,
+            metadata: {
+                version: serein.version,
+                name: "Serein",
+                environment: `NET ${Environment.Version.ToString()}`,
+            },
+        },
+    });
 }
 
 /**
@@ -508,7 +385,7 @@ function loadInstanceID() {
  */
 function createConfigFile() {
     createDirectory(paths.dir);
-    writeAllTextToFile(paths.config, JSON.stringify(defaultConfig, null, 4));
+    writeAllTextToFile(paths.config, JSON.stringify(defaultConfig, null, 2));
 }
 
 /**
