@@ -25,18 +25,18 @@ declare interface IInfo {
     trialTimes: number;
 }
 
-const VERSION = "2.3.0.0";
+const VERSION = '2.3.0.0';
 serein.registerPlugin(
-    "iPanel-Serein",
+    'iPanel-Serein',
     VERSION,
-    "Zaitonn",
-    "网页版控制台-Serein插件"
+    'Zaitonn',
+    '网页版控制台-Serein插件'
 );
-serein.setListener("onPluginsLoaded", connect);
-serein.setListener("onServerStart", onServerStart);
-serein.setListener("onServerStop", onServerStop);
-serein.setListener("onServerSendCommand", onServerSendCommand);
-serein.setListener("onServerOriginalOutput", onServerOriginalOutput);
+serein.setListener('onPluginsLoaded', connect);
+serein.setListener('onServerStart', onServerStart);
+serein.setListener('onServerStop', onServerStop);
+serein.setListener('onServerSendCommand', onServerSendCommand);
+serein.setListener('onServerOriginalOutput', onServerOriginalOutput);
 
 const {
     Security: {
@@ -48,11 +48,11 @@ const {
     IO: { File },
 } = System;
 
-const logger = new Logger("iPanel");
+const logger = new Logger('iPanel');
 const paths = {
-    dir: "plugins/iPanel-Serein",
-    config: "plugins/iPanel-Serein/config.json",
-    instanceID: "plugins/iPanel-Serein/.instanceId",
+    dir: 'plugins/iPanel-Serein',
+    config: 'plugins/iPanel-Serein/config.json',
+    instanceID: 'plugins/iPanel-Serein/.instanceId',
 };
 
 const inputCache = [];
@@ -63,10 +63,10 @@ const outputCache = [];
  */
 const defaultConfig: IConfig = {
     websocket: {
-        addr: "ws://127.0.0.1:30000/ws/instance",
-        password: "",
+        addr: 'ws://127.0.0.1:30000/ws/instance',
+        password: '',
     },
-    customName: "",
+    customName: '',
     reconnect: {
         enable: true,
         interval: 1000 * 7.5,
@@ -74,7 +74,7 @@ const defaultConfig: IConfig = {
     },
 };
 
-import stdio = require("./modules/stdio.js");
+import stdio = require('./modules/stdio.js');
 
 const { createDirectory, existFile, readAllTextFromFile, writeAllTextToFile } =
     stdio;
@@ -112,11 +112,11 @@ function onmessage(msg: string) {
     const packet = JSON.parse(msg) as Packet;
 
     switch (packet.type) {
-        case "request":
+        case 'request':
             handleRequest(packet);
             break;
 
-        case "event":
+        case 'event':
             handleEvent(packet);
             break;
     }
@@ -127,14 +127,14 @@ function onmessage(msg: string) {
  */
 function handleEvent({ subType, data }: Packet) {
     switch (subType) {
-        case "verify_result":
+        case 'verify_result':
             if (data.success) {
-                logger.info("[Host] 验证通过");
+                logger.info('[Host] 验证通过');
                 info.verified = true;
             } else logger.info(`[Host] 验证失败: ${data.reason}`);
             break;
 
-        case "disconnection":
+        case 'disconnection':
             info.disconnectInfo = data.reason;
             break;
     }
@@ -145,7 +145,7 @@ function handleEvent({ subType, data }: Packet) {
  */
 function handleRequest({ subType, data }: Packet) {
     switch (subType) {
-        case "heartbeat":
+        case 'heartbeat':
             const {
                 name: os,
                 hardware: {
@@ -155,8 +155,8 @@ function handleRequest({ subType, data }: Packet) {
             } = serein.getSysInfo();
             const motd = serein.getServerMotd();
             send({
-                type: "return",
-                subType: "heartbeat",
+                type: 'return',
+                subType: 'heartbeat',
                 data: {
                     system: {
                         os,
@@ -181,22 +181,22 @@ function handleRequest({ subType, data }: Packet) {
             });
             break;
 
-        case "server_start":
+        case 'server_start':
             logger.info(`[用户] 启动服务器`);
             serein.startServer();
             break;
 
-        case "server_stop":
+        case 'server_stop':
             logger.info(`[用户] 关闭服务器`);
             serein.stopServer();
             break;
 
-        case "server_kill":
+        case 'server_kill':
             logger.warn(`[用户] 强制结束服务器`);
             serein.killServer();
             break;
 
-        case "server_input":
+        case 'server_input':
             logger.info(`[用户] 服务器输入`);
             Array.from(data).forEach((line: string) => serein.sendCmd(line));
             break;
@@ -209,12 +209,12 @@ function handleRequest({ subType, data }: Packet) {
  * @returns MD5值
  */
 function getMD5(text: string) {
-    let result = "";
+    let result = '';
     MD5.Create()
         .ComputeHash(Encoding.UTF8.GetBytes(String(text)))
         .forEach(
             (byte: Number) =>
-                (result += Number(byte).toString(16).padStart(2, "0"))
+                (result += Number(byte).toString(16).padStart(2, '0'))
         );
     return result;
 }
@@ -240,8 +240,8 @@ function onopen() {
 
     const time = new Date().toISOString();
     send({
-        type: "request",
-        subType: "verify",
+        type: 'request',
+        subType: 'verify',
         data: {
             md5: getMD5(`${time}.${config.websocket.password}`),
             instanceId: loadInstanceID(),
@@ -249,7 +249,7 @@ function onopen() {
             time,
             metadata: {
                 version: serein.version,
-                name: "Serein",
+                name: 'Serein',
                 environment: `NET ${Environment.Version.ToString()}`,
             },
         },
@@ -261,11 +261,11 @@ function onopen() {
  */
 function onclose() {
     logger.warn(
-        `连接已断开${info.disconnectInfo ? ": " + info.disconnectInfo : ""}`
+        `连接已断开${info.disconnectInfo ? ': ' + info.disconnectInfo : ''}`
     );
     if (!info.verified)
         logger.warn(
-            "貌似没有成功连接过，自动重连已关闭。请检查地址是否配置正确"
+            '貌似没有成功连接过，自动重连已关闭。请检查地址是否配置正确'
         );
     else {
         // @ts-ignore
@@ -284,7 +284,7 @@ function reconnect() {
         );
         connect();
     } else {
-        logger.warn("重连次数已达上限");
+        logger.warn('重连次数已达上限');
     }
 }
 
@@ -293,7 +293,7 @@ function reconnect() {
  */
 function sendInputCache() {
     if (inputCache.length > 0) {
-        fastSend("broadcast", "server_input", inputCache);
+        fastSend('broadcast', 'server_input', inputCache);
         inputCache.splice(0, inputCache.length);
     }
 }
@@ -303,7 +303,7 @@ function sendInputCache() {
  */
 function sendOutputCache() {
     if (outputCache.length > 0) {
-        fastSend("broadcast", "server_output", outputCache);
+        fastSend('broadcast', 'server_output', outputCache);
         outputCache.splice(0, outputCache.length);
     }
 }
@@ -312,14 +312,14 @@ function sendOutputCache() {
  * 服务器开启
  */
 function onServerStart() {
-    fastSend("broadcast", "server_start");
+    fastSend('broadcast', 'server_start');
 }
 
 /**
  * 服务器关闭
  */
 function onServerStop(code: number) {
-    fastSend("broadcast", "server_stop", code);
+    fastSend('broadcast', 'server_stop', code);
 }
 
 /**
@@ -349,10 +349,10 @@ function loadConfig(): IConfig {
         createConfigFile();
         if (Environment.Version.Major == 6) {
             serein.setPreLoadConfig([
-                "System.Security.Cryptography.Algorithms",
+                'System.Security.Cryptography.Algorithms',
             ]);
         }
-        throw new Error("配置文件已创建，请修改后重新加载此插件");
+        throw new Error('配置文件已创建，请修改后重新加载此插件');
     }
 }
 
@@ -363,12 +363,12 @@ function loadConfig(): IConfig {
 function loadInstanceID() {
     if (existFile(paths.instanceID)) {
         const id = (File.ReadAllBytes(paths.instanceID) as number[])
-            .map((byte) => byte.toString(16).padStart(2, "0"))
-            .join("");
+            .map((byte) => byte.toString(16).padStart(2, '0'))
+            .join('');
 
         if (/^\w{32}$/.test(id)) return id;
     }
-    const newId: string = Guid.NewGuid().ToString("N");
+    const newId: string = Guid.NewGuid().ToString('N');
     logger.warn(`新的实例ID已生成：${newId}`);
     createDirectory(paths.dir);
 
@@ -393,47 +393,47 @@ function createConfigFile() {
  * @param config 配置对象
  */
 function checkConfig(config: IConfig) {
-    if (!config.customName) logger.warn("配置文件中自定义名称为空");
+    if (!config.customName) logger.warn('配置文件中自定义名称为空');
 
     if (!config.websocket)
         throw new Error(
-            "配置文件中`websocket`项丢失，请删除配置文件后重新加载以创建"
+            '配置文件中`websocket`项丢失，请删除配置文件后重新加载以创建'
         );
 
     if (!config.reconnect)
         throw new Error(
-            "配置文件中`reconnect`项丢失，请删除配置文件后重新加载以创建"
+            '配置文件中`reconnect`项丢失，请删除配置文件后重新加载以创建'
         );
 
     if (!config.websocket.addr)
-        throw new Error("配置文件中`websocket.addr`项为空");
+        throw new Error('配置文件中`websocket.addr`项为空');
 
     if (!config.websocket.password)
-        throw new Error("配置文件中`websocket.password`项为空");
+        throw new Error('配置文件中`websocket.password`项为空');
 
-    if (typeof config.websocket.addr != "string")
-        throw new Error("配置文件中`websocket.addr`类型不正确");
+    if (typeof config.websocket.addr != 'string')
+        throw new Error('配置文件中`websocket.addr`类型不正确');
 
-    if (typeof config.websocket.password != "string")
-        throw new Error("配置文件中`websocket.password`类型不正确");
+    if (typeof config.websocket.password != 'string')
+        throw new Error('配置文件中`websocket.password`类型不正确');
 
     if (!/^wss?:\/\/.+/.test(config.websocket.addr))
-        throw new Error("配置文件中`websocket.addr`项格式不正确");
+        throw new Error('配置文件中`websocket.addr`项格式不正确');
 
-    if (typeof config.reconnect.enable != "boolean")
-        throw new Error("配置文件中`reconnect.enable`类型不正确");
+    if (typeof config.reconnect.enable != 'boolean')
+        throw new Error('配置文件中`reconnect.enable`类型不正确');
 
-    if (typeof config.reconnect.interval != "number")
-        throw new Error("配置文件中`reconnect.interval`类型不正确");
+    if (typeof config.reconnect.interval != 'number')
+        throw new Error('配置文件中`reconnect.interval`类型不正确');
 
-    if (typeof config.reconnect.maxTimes != "number")
-        throw new Error("配置文件中`reconnect.maxTimes`类型不正确");
+    if (typeof config.reconnect.maxTimes != 'number')
+        throw new Error('配置文件中`reconnect.maxTimes`类型不正确');
 
     if (config.reconnect.interval <= 500)
-        throw new Error("配置文件中`reconnect.interval`数值超出范围");
+        throw new Error('配置文件中`reconnect.interval`数值超出范围');
 
     if (config.reconnect.maxTimes < 0)
-        throw new Error("配置文件中`reconnect.maxTimes`数值超出范围");
+        throw new Error('配置文件中`reconnect.maxTimes`数值超出范围');
 }
 
 // @ts-ignore
