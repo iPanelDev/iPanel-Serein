@@ -1,6 +1,6 @@
 {
     "$schema": "https://sereincommunity.github.io/json-schemas/v2/plugin-info.json",
-    "name": "iPanel的Serein实例插件",
+    "name": "iPanel",
     "id": "ipanel-serein",
     "description": "适用于Serein的实例插件",
     "targetingSerein": [
@@ -12,7 +12,13 @@
             "version": []
         }
     ],
-    "isModule": false,
+    "type": "js",
+    "authors": [
+        {
+            "name": "Zaitonn"
+        }
+    ],
+    "version": "2.3.0.0",
     "tags": [
         "management",
         "api",
